@@ -2,7 +2,10 @@
 
 ## Why
 
-I have an Kraken X53 and a Corsair Commander Pro in my UnRaid server. I was looking for ways to control it, running a Windows 10/11 VM with CAM and iCUE is overkill. Luckily, the great developers at liquidctl (https://github.com/liquidctl/liquidctl) released a tool that can control both. avpnusr has created an image (https://github.com/avpnusr/liquidctl-docker) that allows control of the Kraken AIO, but not the Commander controller. So I started extending the script, and quickly decided to go with a config file instead - because that's easier to back up and brings more flexibilty. I went with YAML, because it's easy to write and read for humans and Stefan Farestam posted a simple bash-based YAML parser (https://stackoverflow.com/a/21189044) that looked promising (and worked from the start!).
+I have an Kraken X53 and a Corsair Commander Pro in my UnRaid server, so I was looking for ways to control it. One option is running a Windows 10/11 VM with CAM and iCUE, but this seems overkill.
+
+Luckily, the great developers at [liquidctl](https://github.com/liquidctl/liquidctl) released a tool that can control both.
+[avpnusr](https://github.com/avpnusr/liquidctl-docker) created an image that allows controlling the Kraken AIO, but not the Commander controller. I started extending the script, but quickly decided to start from scratch and go with a config file instead - because it's easier to back up and brings more flexibilty. I went with YAML, because it's easy to write and read for humans and [Stefan Farestam](https://stackoverflow.com/a/21189044) posted a simple, bash-based YAML parser that looked promising (and worked out-of-the-box!).
 
 ## How
 
@@ -34,12 +37,17 @@ I have an Kraken X53 and a Corsair Commander Pro in my UnRaid server. I was look
 
 ### container mount options
 
-1. Run the container privileged (```--privileged```) and reduce log max size (e.g. ```--log-opt max-size=1m --log-opt max-file=1```). 
+1. Run the container privileged (```--privileged```) and reduce log max size (e.g. `````). 
 2. No network is required. 
 3. Mount your water cooler or controller devices into the container, e.g. ```--device /sys/bus/usb/devices/1-12.2```
 4. Mount your config file into the container. The script expects the file in the ```/app``` folder, e.g. ```-v ~/config.yaml:/app/config.yaml```
 
-```sh
-
-```
+    ```sh
+    docker run -d \
+    --device /sys/bus/usb/devices/1-12.2 \
+    --privileged \
+    --log-opt max-size=1m --log-opt max-file=1 \
+    -v ~/config.yaml:/app/config.yaml \
+    --restart=unless-stopped mplogas/laac:latest
+    ```
 
