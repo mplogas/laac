@@ -20,6 +20,8 @@ The shell script uses [inotify-tools](https://github.com/inotify-tools/inotify-t
 5. Similar to the Kraken guide, liquidctl offers a documentation to set up the Corsair Commander Pro (https://github.com/liquidctl/liquidctl/blob/main/docs/corsair-commander-guide.md). Programming the controller fan speeds follows a pattern similar to the AiO fan speed / pump speed, except that you can specify a temperature probe.
 6. Controller LED is not yet supported, but can be easily added.
 
+**sample config.yaml**
+
 ```yaml
 cooling:
     type: 'kraken'
@@ -43,6 +45,8 @@ controller:
 2. No network is required. 
 3. Mount your water cooler or controller devices into the container, e.g. ```--device /sys/bus/usb/devices/1-12.2```
 4. Mount your config file into the container. The script expects the file in the ```/app``` folder, e.g. ```-v ~/config.yaml:/app/config.yaml```
+
+**container start**
 
 ```sh
 docker run -d \
