@@ -78,6 +78,7 @@ configure_liquidctl
 inotifywait -q -m -e close_write /app/config.yaml |
 while read -r filename event; do
   echo "file changed"
+  eval $(parse_yaml /app/config.yaml)
   configure_liquidctl
 done
 
