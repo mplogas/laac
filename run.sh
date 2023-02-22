@@ -18,6 +18,39 @@ function parse_yaml {
    }'
 }
 
+
+function debug_variables {
+   # todo: test printenv/env and consider grepping by prefix
+   # https://stackoverflow.com/questions/1305237/how-to-list-variables-declared-in-script-in-bash
+   echo "cooling type: $cooling_type"
+   echo "cooling pump speed: $cooling_pump_speed"
+   echo "cooling fan speed: $cooling_fan_speed"
+   echo "cooling color: $cooling_color"
+   echo "controller type: $controller_type"
+   echo "controller fan sync: $controller_fan_sync_speed"
+   echo "controller fan 1: $controller_fan1_speed"
+   echo "controller fan 2: $controller_fan2_speed"
+   echo "controller fan 3: $controller_fan3_speed"
+   echo "controller fan 4: $controller_fan4_speed"
+   echo "controller fan 5: $controller_fan5_speed"
+   echo "controller fan 6: $controller_fan6_speed"
+}
+
+## bandaid, improve with todo
+function unset_optional_variables {
+   echo "unsetting optional variables"
+   unset cooling_fan_speed
+   unset cooling_color
+   unset controller_type
+   unset controller_fan_sync_speed
+   unset controller_fan1_speed
+   unset controller_fan2_speed
+   unset controller_fan3_speed
+   unset controller_fan4_speed
+   unset controller_fan5_speed
+   unset controller_fan6_speed
+}
+
 function configure_liquidctl {
    liquidctl initialize all
 
@@ -40,8 +73,9 @@ function configure_liquidctl {
    if [ ! -z "$controller_type" ]; then
       liquidctl --match $controller_type list
 
-      if [ ! -z "$controller_fan_speed" ]; then
-         liquidctl --match $controller_type set sync speed $controller_fan_speed
+      if [ ! -z "$controller_fan_sync_speed" ]; then         
+         echo "controller sync fan: $controller_fan_sync_speed"
+         liquidctl --match $controller_type set sync speed $controller_fan_sync_speed
       else 
 
          if [ ! -z "$controller_fan1_speed" ]; then
@@ -78,11 +112,12 @@ function configure_liquidctl {
 }
 
 eval $(parse_yaml /app/config.yaml)
-configure_liquidctl
+#configure_liquidctl
 
 inotifywait -q -m -e close_write /app/config.yaml |
 while read -r filename event; do
   echo "file changed"
+  unset_optional_variables
   eval $(parse_yaml /app/config.yaml)
   configure_liquidctl
 done
