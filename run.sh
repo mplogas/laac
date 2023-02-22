@@ -112,7 +112,7 @@ function configure_liquidctl {
 }
 
 eval $(parse_yaml /app/config.yaml)
-#configure_liquidctl
+configure_liquidctl
 
 inotifywait -q -m -e close_write /app/config.yaml |
 while read -r filename event; do
