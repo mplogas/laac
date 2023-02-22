@@ -41,7 +41,7 @@ function configure_liquidctl {
       liquidctl --match $controller_type list
 
       if [ ! -z "$controller_fan_speed" ]; then
-         liquidctl --match $controller_type set sync $controller_fan_speed
+         liquidctl --match $controller_type set sync speed $controller_fan_speed
       else 
 
          if [ ! -z "$controller_fan1_speed" ]; then
