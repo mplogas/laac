@@ -40,34 +40,39 @@ function configure_liquidctl {
    if [ ! -z "$controller_type" ]; then
       liquidctl --match $controller_type list
 
-      if [ ! -z "$controller_fan1_speed" ]; then
-         echo "controller fan1: $controller_fan1_speed"
-         liquidctl --match $controller_type set fan1 speed $controller_fan1_speed
-      fi
+      if [ ! -z "$controller_fan_speed" ]; then
+         liquidctl --match $controller_type set sync $controller_fan_speed
+      else 
 
-      if [ ! -z "$controller_fan2_speed" ]; then
-         echo "controller fan2: $controller_fan2_speed"
-         liquidctl --match $controller_type set fan2 speed $controller_fan2_speed
-      fi
+         if [ ! -z "$controller_fan1_speed" ]; then
+            echo "controller fan1: $controller_fan1_speed"
+            liquidctl --match $controller_type set fan1 speed $controller_fan1_speed
+         fi
 
-      if [ ! -z "$controller_fan3_speed" ]; then
-         echo "controller fan3: $controller_fan3_speed"
-         liquidctl --match $controller_type set fan3 speed $controller_fan3_speed
-      fi
+         if [ ! -z "$controller_fan2_speed" ]; then
+            echo "controller fan2: $controller_fan2_speed"
+            liquidctl --match $controller_type set fan2 speed $controller_fan2_speed
+         fi
 
-      if [ ! -z "$controller_fan4_speed" ]; then
-         echo "controller fan4: $controller_fan4_speed"
-         liquidctl --match $controller_type set fan4 speed $controller_fan4_speed
-      fi
+         if [ ! -z "$controller_fan3_speed" ]; then
+            echo "controller fan3: $controller_fan3_speed"
+            liquidctl --match $controller_type set fan3 speed $controller_fan3_speed
+         fi
 
-      if [ ! -z "$controller_fan5_speed" ]; then
-         echo "controller fan5: $controller_fan5_speed"
-         liquidctl --match $controller_type set fan5 speed $controller_fan5_speed
-      fi
+         if [ ! -z "$controller_fan4_speed" ]; then
+            echo "controller fan4: $controller_fan4_speed"
+            liquidctl --match $controller_type set fan4 speed $controller_fan4_speed
+         fi
 
-      if [ ! -z "$controller_fan6_speed" ]; then
-         echo "controller fan6: $controller_fan6_speed"
-         liquidctl --match $controller_type set fan6 speed $controller_fan6_speed
+         if [ ! -z "$controller_fan5_speed" ]; then
+            echo "controller fan5: $controller_fan5_speed"
+            liquidctl --match $controller_type set fan5 speed $controller_fan5_speed
+         fi
+
+         if [ ! -z "$controller_fan6_speed" ]; then
+            echo "controller fan6: $controller_fan6_speed"
+            liquidctl --match $controller_type set fan6 speed $controller_fan6_speed
+         fi
       fi
    fi
 }
