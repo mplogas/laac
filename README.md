@@ -15,30 +15,12 @@ The shell script uses [inotify-tools](https://github.com/inotify-tools/inotify-t
 
 1. The file needs to be named config.yaml
 2. The type parameter corresponds with the ```--match <id>``` parameter of liquidctl
-3. Cooling type and Cooling pump speed are the only required parameters. However, when using the controller you need to define its type.
+3. When using cooling, you need to define its type and pump speed. When using the controller you need to define its type.
 4. The liquidctl Kraken guide describes pump temperature/duty pairs, color settings and fan settings for supported AiO coolings. This could be easily expanded for other AiOs (https://github.com/liquidctl/liquidctl/blob/main/docs/kraken-x3-z3-guide.md)
 5. Similar to the Kraken guide, liquidctl offers a documentation to set up the Corsair Commander Pro (https://github.com/liquidctl/liquidctl/blob/main/docs/corsair-commander-guide.md). Programming the controller fan speeds follows a pattern similar to the AiO fan speed / pump speed, except that you can specify a temperature probe.
 6. To control all fans with the same speed (```liquidctl --match <match> set sync speed <speed>```), define ```fan_sync_speed: '<speed>'``` instead of ```fan<x>_speed: '<speed>'``` as controller property.
 7. Controller LED is not yet supported, but can be easily added.
-
-**sample config.yaml**
-
-```yaml
-cooling:
-    type: 'kraken'
-    pump_speed: '20 20 30 35 35 60 40 80 45 100'
-    fan_speed: '20 0 30 20 30 40 35 60 40 75 50 100'
-    color: 'set sync color off'
-controller:
-    type: 'commander'
-    fan1_speed: '20 0 30 400 35 900 40 1200 45 1500 --temperature-sensor 2'
-    fan2_speed: '20 0 30 400 35 900 40 1200 45 1500 --temperature-sensor 2'
-    fan3_speed: '25 0 30 500 35 800 40 1000 45 1500 --temperature-sensor 1'
-    fan4_speed: '25 0 30 500 35 1000 40 1500 --temperature-sensor 4'
-    fan5_speed: '25 0 30 500 35 1000 40 1500 --temperature-sensor 4'
-    fan6_speed: '25 0 30 500 35 1000 40 1500 --temperature-sensor 3'
-```
-
+8. Refer to the config.template.yaml in the repository
 
 ### container mount options
 
@@ -58,3 +40,7 @@ docker run -d \
     --restart=unless-stopped mplogas/laac:latest
 ```
 
+## Debug
+
+I have made some poor attempts to help you and me debug your issues. use the `debug` tag to get the debug-log enabled version of the container. Or build it yourself using `Dockerfile.Debug`.
+The container logs will be "slightly" more verbose but this could help understanding potential issues. (I hope) 
