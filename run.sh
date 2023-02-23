@@ -38,7 +38,9 @@ function debug_variables {
 
 ## bandaid, improve with todo
 function unset_optional_variables {
-   echo "unsetting optional variables"
+   echo "unsetting all variables"
+   unset $cooling_type
+   unset cooling_pump_speed
    unset cooling_fan_speed
    unset cooling_color
    unset controller_type
@@ -54,24 +56,25 @@ function unset_optional_variables {
 function configure_liquidctl {
    liquidctl initialize all
 
-   ### AIO cooling (required)
-   liquidctl --match $cooling_type list
-   
-   echo "cooling pump: $cooling_pump_speed"
-   liquidctl --match $cooling_type set pump speed $cooling_pump_speed
+   ### AIO cooling (optional now, but requires pump speed when used)   
+   if [ ! -z "$cooling_type" ]; then
+      liquidctl --match $cooling_type list
 
-   if [ ! -z "$cooling_fan_speed" ]; then
-      echo "cooling fan: $cooling_fan_speed"
-      liquidctl --match $cooling_type set fan speed $cooling_fan_speed
+      echo "cooling pump: $cooling_pump_speed"
+      liquidctl --match $cooling_type set pump speed $cooling_pump_speed
+
+      if [ ! -z "$cooling_fan_speed" ]; then
+         echo "cooling fan: $cooling_fan_speed"
+         liquidctl --match $cooling_type set fan speed $cooling_fan_speed
+      fi
+
+      if [ ! -z "$cooling_color" ]; then
+         echo "cooling color: $cooling_color"
+         liquidctl --match $cooling_type $cooling_color
+      fi
    fi
 
-   if [ ! -z "$cooling_color" ]; then
-      echo "cooling color: $cooling_color"
-      liquidctl --match $cooling_type $cooling_color
-   fi
-
-
-   ## controller (optional): commander pro or alike
+   ## controller (optional)
    if [ ! -z "$controller_type" ]; then
       liquidctl --match $controller_type list
 
@@ -116,6 +119,7 @@ function configure_liquidctl {
 
 eval $(parse_yaml /app/config.yaml)
 if [ ! -z "$SCRIPT_DEBUG" ]; then
+   echo "initial:"
    debug_variables
 fi
 configure_liquidctl
@@ -124,21 +128,21 @@ inotifywait -q -m -e close_write /app/config.yaml |
 while read -r filename event; do
   echo "file changed"
    if [ ! -z "$SCRIPT_DEBUG" ]; then
-      echo "cached variables:"
+      echo "cached:"
       debug_variables
    fi
    
   unset_optional_variables
 
    if [ ! -z "$SCRIPT_DEBUG" ]; then
-      echo "variables should be empty/cleared"
+      echo "cleared:"
       debug_variables
    fi
 
   eval $(parse_yaml /app/config.yaml)
 
    if [ ! -z "$SCRIPT_DEBUG" ]; then
-      echo "new variables:"
+      echo "reload:"
       debug_variables
    fi
 
