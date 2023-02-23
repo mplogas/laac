@@ -15,7 +15,7 @@ The shell script uses [inotify-tools](https://github.com/inotify-tools/inotify-t
 
 1. The file needs to be named config.yaml
 2. The type parameter corresponds with the ```--match <id>``` parameter of liquidctl
-3. Cooling type and Cooling pump speed are the only required parameters. However, when using the controller its type must be specified.
+3. Cooling type and Cooling pump speed are the only required parameters. However, when using the controller you need to define its type.
 4. The liquidctl Kraken guide describes pump temperature/duty pairs, color settings and fan settings for supported AiO coolings. This could be easily expanded for other AiOs (https://github.com/liquidctl/liquidctl/blob/main/docs/kraken-x3-z3-guide.md)
 5. Similar to the Kraken guide, liquidctl offers a documentation to set up the Corsair Commander Pro (https://github.com/liquidctl/liquidctl/blob/main/docs/corsair-commander-guide.md). Programming the controller fan speeds follows a pattern similar to the AiO fan speed / pump speed, except that you can specify a temperature probe.
 6. To control all fans with the same speed (```liquidctl --match <match> set sync speed <speed>```), define ```fan_sync_speed: '<speed>'``` instead of ```fan<x>_speed: '<speed>'``` as controller property.

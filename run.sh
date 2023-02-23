@@ -56,6 +56,8 @@ function configure_liquidctl {
 
    ### AIO cooling (required)
    liquidctl --match $cooling_type list
+   
+   echo "cooling pump: $cooling_pump_speed"
    liquidctl --match $cooling_type set pump speed $cooling_pump_speed
 
    if [ ! -z "$cooling_fan_speed" ]; then
@@ -111,14 +113,35 @@ function configure_liquidctl {
    fi
 }
 
+
 eval $(parse_yaml /app/config.yaml)
+if [ ! -z "$SCRIPT_DEBUG" ]; then
+   debug_variables
+fi
 configure_liquidctl
 
 inotifywait -q -m -e close_write /app/config.yaml |
 while read -r filename event; do
   echo "file changed"
+   if [ ! -z "$SCRIPT_DEBUG" ]; then
+      echo "cached variables:"
+      debug_variables
+   fi
+   
   unset_optional_variables
+
+   if [ ! -z "$SCRIPT_DEBUG" ]; then
+      echo "variables should be empty/cleared"
+      debug_variables
+   fi
+
   eval $(parse_yaml /app/config.yaml)
+
+   if [ ! -z "$SCRIPT_DEBUG" ]; then
+      echo "new variables:"
+      debug_variables
+   fi
+
   configure_liquidctl
 done
 
