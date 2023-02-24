@@ -25,4 +25,4 @@ jobs:
         with:
           push: true
           file: ./Dockerfile.Debug
-          tags: mplogas/laac:dev
+          tags: mplogas/laac:debug
