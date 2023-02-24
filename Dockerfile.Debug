@@ -2,7 +2,7 @@ FROM ubuntu:latest
 
 RUN mkdir /app
 COPY run.sh /app/run.sh
-COPY config.yaml /app/config.yaml
+COPY config.template.yaml /app/config.yaml
 ENV SCRIPT_DEBUG=true
 
 RUN apt update \
