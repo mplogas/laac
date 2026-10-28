@@ -39,7 +39,7 @@ function debug_variables {
 ## bandaid, improve with todo
 function unset_optional_variables {
    echo "unsetting all variables"
-   unset $cooling_type
+   unset cooling_type
    unset cooling_pump_speed
    unset cooling_fan_speed
    unset cooling_color
