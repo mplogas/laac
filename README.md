@@ -40,6 +40,24 @@ docker run -d \
     --restart=unless-stopped mplogas/laac:latest
 ```
 
+## Monitoring
+
+Need a quick look at what's going on thermally? A standby-safe dashboard ships in the image at `/app/monitor.sh`. It runs on demand only (it does **not** write to the container logs, so the config-reload history stays intact), loops until you press `Ctrl-C`, and refreshes every 10 seconds by default:
+
+```sh
+docker exec -it <container> /app/monitor.sh        # default 10s refresh
+docker exec -it <container> /app/monitor.sh 30     # custom interval in seconds
+```
+
+It shows two things:
+
+1. **Cooling / fans** via `liquidctl status` — liquid temp, pump RPM/duty, and each controller fan's RPM.
+2. **Disk temperatures** via the host's `drivetemp` hwmon sensors.
+
+For the disk temperatures to appear, load the module on the **host** (not the container): `modprobe drivetemp`. Because the container already runs `--privileged`, it can read the host's `/sys/class/hwmon/*` sensors and `/dev/sd*` devices.
+
+**Spinning (spindle) disks are never woken by the monitor.** Before reading a disk's temperature, the script checks its power state with `hdparm -C` (a `CHECK POWER MODE` command that neither spins the drive up nor resets its spin-down timer). A disk in standby is reported as `STANDBY` and its temperature is skipped; only active/idle disks are read.
+
 ## Debug
 
 I have made some poor attempts to help you and me debug your issues. use the `debug` tag to get the debug-log enabled version of the container. Or build it yourself using `Dockerfile.Debug`.
