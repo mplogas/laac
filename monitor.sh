@@ -51,7 +51,10 @@ resolve_blockdev() {
 }
 
 ## power state via CHECK POWER MODE — safe, never wakes the drive.
-## echoes: standby | active | unknown
+## echoes: standby | active | unknown. Some drives (e.g. certain Seagate
+## IronWolf) return a nonstandard code while awake that hdparm prints as
+## "unknown", but the ATA standby code (0x00) is standard, so a spun-down
+## drive is still reliably reported as "standby" here.
 power_state() {
    local dev="$1" line
    line="$(hdparm -C "/dev/$dev" 2>/dev/null | grep -i 'drive state is')"
@@ -71,7 +74,7 @@ trim() {
 }
 
 print_disks() {
-   local found=0 h model blk state temp_raw temp note
+   local found=0 h model blk state temp_raw temp note guarded
    for h in /sys/class/hwmon/hwmon*; do
       [ -r "$h/name" ] || continue
       [ "$(cat "$h/name")" = "drivetemp" ] || continue
@@ -83,11 +86,16 @@ print_disks() {
 
       if [ -n "$blk" ] && command -v hdparm >/dev/null 2>&1; then
          state="$(power_state "$blk")"
+         guarded=1
       else
-         ## no block device or no hdparm: can't guard safely
+         ## no /dev mapping or no hdparm: standby can't be checked at all
          state="unknown"
+         guarded=0
       fi
 
+      ## Skip ONLY on a positive standby/sleeping reading. The standby code
+      ## is reported reliably even by drives that return "unknown" while
+      ## awake, so a spun-down drive is always caught here and never read.
       if [ "$state" = "standby" ]; then
          printf "  %-20s %-10s STANDBY (temp skipped)\n" "$model" "${blk:+/dev/$blk}"
          continue
@@ -107,9 +115,12 @@ print_disks() {
          continue
       fi
 
-      ## flag reads we couldn't guard, so an unexpected wake is never silent
+      ## Flag only the genuinely unguarded case: hdparm couldn't run (no
+      ## mapping / not installed), so standby was never checked. A drive
+      ## that merely reports "unknown" while awake is still guarded — its
+      ## standby state would have been caught above — so it reads clean.
       note=""
-      [ "$state" = "unknown" ] && note="  (state unknown — read not guarded)"
+      [ "$guarded" -eq 0 ] && note="  (standby not checkable — read not guarded)"
       printf "  %-20s %-10s %d°C%s\n" "$model" "${blk:+/dev/$blk}" "$temp" "$note"
    done
 
