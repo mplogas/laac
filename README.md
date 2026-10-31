@@ -1,46 +1,115 @@
-# LaaC: liquidctl as a Container 
+# LaaC: liquidctl as a Container
 
-## Why
+LaaC runs [liquidctl](https://github.com/liquidctl/liquidctl) in a container and configures AIO coolers and fan controllers from a YAML file. It applies the file on startup and again every time you save it.
 
-I have an NZXT Kraken X53 AiO liquid cooler and a Corsair Commander Pro (to control the various fans and add more temperature sensors) in my UnRaid server but weren't able to configure them properly. Running a dedicated Windows 10/11 VM with CAM and iCUE works, but doesn't really make sense. Something with a smaller footprint running on Linux, that can be containerized, would be ideal.
+It was built for an Unraid server with an NZXT Kraken X53 and a Corsair Commander Pro, as a lighter alternative to a Windows VM running CAM/iCUE.
 
-Luckily, the great developers of [liquidctl](https://github.com/liquidctl/liquidctl) released a tool that can control many liquid cooling AiO and fan controller solutions.
-[avpnusr](https://github.com/avpnusr/liquidctl-docker) created a Docker image that allows controlling the Kraken AIO, but unfortunately not the Commander controller. So I started extending the script, but quickly realized that starting from scratch would allow me to go with a config file instead - because that's easier to back up and allows changing values on the fly. I went with YAML, it's easy to read (and write) for humans and [Stefan Farestam](https://stackoverflow.com/a/21189044) shared a simple, bash-based YAML parser that worked out-of-the-box. 
+**Tested hardware:** NZXT Kraken X53, Corsair Commander Pro. Other devices supported by liquidctl should work as long as their commands fit the config keys below.
 
-The shell script uses [inotify-tools](https://github.com/inotify-tools/inotify-tools) to watch the config file and whenever it is saved (```close_write```, or ```moved_to``` for editors that save via rename) liquidctl will be reconfigured. I think, this could lead to interesting scenarios where external sources update the config file based on external temperature readings. What could possibly go wrong!?! 
+## Quick start
 
-## How
+1. Create a folder with a `config.yaml` in it (see [Configuration](#configuration)), e.g. `/mnt/appdata/laac/config.yaml`.
+2. Start the container with that folder mounted to `/config`:
 
-### create a YAML config file
+   ```sh
+   docker run -d --name laac \
+       --privileged \
+       --network none \
+       --log-opt max-size=1m --log-opt max-file=1 \
+       -v /mnt/appdata/laac:/config \
+       --restart=unless-stopped \
+       mplogas/laac:latest
+   ```
 
-1. The file needs to be named config.yaml
-2. The type parameter corresponds with the ```--match <id>``` parameter of liquidctl
-3. When using cooling, you need to define its type and pump speed. When using the controller you need to define its type.
-4. The liquidctl Kraken guide describes pump temperature/duty pairs, color settings and fan settings for supported AiO coolings. This could be easily expanded for other AiOs (https://github.com/liquidctl/liquidctl/blob/main/docs/kraken-x3-z3-guide.md)
-5. Similar to the Kraken guide, liquidctl offers a documentation to set up the Corsair Commander Pro (https://github.com/liquidctl/liquidctl/blob/main/docs/corsair-commander-guide.md). Programming the controller fan speeds follows a pattern similar to the AiO fan speed / pump speed, except that you can specify a temperature probe.
-6. To control all fans with the same speed (```liquidctl --match <match> set sync speed <speed>```), define ```fan_sync_speed: '<speed>'``` instead of ```fan<x>_speed: '<speed>'``` as controller property.
-7. Controller LED is not yet supported, but can be easily added.
-8. Refer to the config.template.yaml in the repository
-9. Comments are supported, both on their own line and after a value (```fan1_speed: 20  # quiet```). An unquoted value ends at the first ```#```, so quote the value if it needs a literal ```#```. Fans you don't list keep whatever speed they were last set to, e.g. from a previous ```fan_sync_speed``` run.
+3. Check the logs (`docker logs laac`). The first line should be `using config: /config/config.yaml`, followed by the devices liquidctl found and the commands it ran.
 
-### container mount options
+## Configuration
 
-1. Run the container privileged (```--privileged```) and reduce log max size (e.g. ```--log-opt max-size=1m --log-opt max-file=1```). 
-2. No network is required. 
-3. Mount your water cooler or controller devices into the container, e.g. ```--device /sys/bus/usb/devices/1-12.2```
-4. Mount the **directory** that contains your config.yaml to ```/config```, e.g. ```-v /mnt/user/appdata/laac:/config```. 
-   Mounting the file itself (```-v ~/config.yaml:/app/config.yaml```) still works, but a single-file bind mount is pinned to the file's inode: many editors (vim, sed -i, most GUI editors, some SMB clients) save by writing a new file and renaming it over the old one, and from then on the container no longer sees any change until it is restarted. The script detects this and logs a ```WARNING```, but the directory mount avoids the problem entirely.
+### Example
 
-**container start**
-
-```sh
-docker run -d \
-    --device /sys/bus/usb/devices/<your_usb_id> \
-    --privileged \
-    --log-opt max-size=1m --log-opt max-file=1 \
-    -v <path_to_config_dir>:/config \
-    --restart=unless-stopped mplogas/laac:latest
+```yaml
+cooling:
+  type: 'kraken'                                   # liquidctl --match kraken
+  pump_speed: '20 20 30 35 35 60 40 80 45 100'     # liquid temp / pump duty % pairs
+  color: 'set sync color off'                      # raw liquidctl arguments
+controller:
+  type: 'commander'                                # liquidctl --match commander
+  # fan_sync_speed: '75'                           # all fans at once, overrides fanN_speed
+  fan1_speed: '20 0 30 400 35 900 40 1200 45 1500 --temperature-sensor 2'
+  fan2_speed: '20 0 30 400 35 900 40 1200 45 1500 --temperature-sensor 2'
+  fan3_speed: 50                                   # fixed duty %
 ```
+
+A complete example is in [config.template.yaml](config.template.yaml).
+
+### Keys
+
+Each key turns into exactly one liquidctl command. On startup and on every reload, the script first runs `liquidctl initialize all`, then the commands below.
+
+| Key | liquidctl command | Notes |
+|---|---|---|
+| `cooling.type` | `liquidctl --match <type> list` | Enables the cooling section. Matched against the device description, e.g. `kraken`. |
+| `cooling.pump_speed` | `liquidctl --match <type> set pump speed <value>` | Required when `cooling.type` is set. |
+| `cooling.fan_speed` | `liquidctl --match <type> set fan speed <value>` | Only for coolers with a fan channel (Kraken Z and 2023 models). The Kraken X series has none. |
+| `cooling.color` | `liquidctl --match <type> <value>` | The value is passed as raw arguments, so write the whole command, e.g. `set sync color off`. |
+| `controller.type` | `liquidctl --match <type> list` | Enables the controller section, e.g. `commander`. |
+| `controller.fan_sync_speed` | `liquidctl --match <type> set sync speed <value>` | Sets all fans. When present, `fanN_speed` keys are ignored. |
+| `controller.fan1_speed` ... `fan6_speed` | `liquidctl --match <type> set fanN speed <value>` | One key per fan header. |
+
+### Speed values
+
+- **Fixed duty:** a single number, e.g. `50`.
+- **Kraken curve:** pairs of liquid temperature (C) and duty (%), e.g. `'20 20 30 35 35 60 40 80 45 100'`. See the [Kraken guide](https://github.com/liquidctl/liquidctl/blob/main/docs/kraken-x3-z3-guide.md).
+- **Commander Pro curve:** pairs of temperature (C) and RPM, plus `--temperature-sensor N` to pick the probe, e.g. `'20 0 30 400 35 900 --temperature-sensor 2'`. See the [Commander guide](https://github.com/liquidctl/liquidctl/blob/main/docs/corsair-commander-guide.md).
+
+### Rules worth knowing
+
+- Comments work on their own line and after a value (`fan1_speed: 20  # quiet`). An unquoted value ends at the first `#`, so quote the value if it needs a literal `#`.
+- Fans you don't list keep whatever speed they were last set to (for example by an earlier `fan_sync_speed`). Removing a key does not reset the fan.
+- Controller LEDs are not supported yet.
+
+### Live reload
+
+The script watches the `/config` folder. When `config.yaml` is saved, either written in place or renamed into place by the editor, the log shows `file changed` and the whole file is applied again.
+
+## Running the container
+
+### Docker compose
+
+```yaml
+services:
+  laac:
+    image: mplogas/laac:latest
+    container_name: laac
+    restart: unless-stopped
+    network_mode: none
+    privileged: true
+    logging:
+      options:
+        max-size: "1m"
+        max-file: "1"
+    volumes:
+      - /mnt/appdata/laac:/config
+```
+
+### Mounting the config
+
+- **Mount a folder to `/config`.** This is the setup that reloads reliably.
+- **Don't mount anything over `/app`.** The image keeps `run.sh` and `monitor.sh` there, and a mount replaces the whole folder.
+- **Mounting only the file still works** (`-v <path>/config.yaml:/app/config.yaml`), but a single-file mount is tied to that exact file. Many editors save by writing a new file and renaming it over the old one, and from then on the container doesn't see any change until it is restarted. The log shows a `WARNING` when that happens.
+- `--privileged` is needed for USB access to the devices. No network is needed.
+
+### Unraid
+
+Map the **pool path** (`/mnt/<pool>/...`), not the user share (`/mnt/user/...`). `/mnt/user` is a FUSE layer on top of the pools: the container still reads the new content through it, but a change made directly on the pool path doesn't trigger a reload.
+
+### Image tags
+
+| Tag | Built from | Notes |
+|---|---|---|
+| `latest` | `master` | Release version. |
+| `dev` | `dev` branch or a manual workflow run | May contain unreleased changes. |
+| `debug` | `master` | `SCRIPT_DEBUG=true`, ships `config.template.yaml` as `/app/config.yaml`, includes vim. |
 
 ## Monitoring
 
@@ -53,14 +122,46 @@ docker exec -it <container> /app/monitor.sh 30     # custom interval in seconds
 
 It shows two things:
 
-1. **Cooling / fans** via `liquidctl status` — liquid temp, pump RPM/duty, and each controller fan's RPM.
+1. **Cooling / fans** via `liquidctl status`: liquid temp, pump RPM/duty, and each controller fan's RPM.
 2. **Disk temperatures** via the host's `drivetemp` hwmon sensors.
 
 For the disk temperatures to appear, load the module on the **host** (not the container): `modprobe drivetemp`. Because the container already runs `--privileged`, it can read the host's `/sys/class/hwmon/*` sensors and `/dev/sd*` devices.
 
 **Spinning (spindle) disks are never woken by the monitor.** Before reading a disk's temperature, the script checks its power state with `hdparm -C` (a `CHECK POWER MODE` command that neither spins the drive up nor resets its spin-down timer). A disk in standby is reported as `STANDBY` and its temperature is skipped; only active/idle disks are read.
 
-## Debug
+## Troubleshooting
 
-I have made some poor attempts to help you and me debug your issues. use the `debug` tag to get the debug-log enabled version of the container. Or build it yourself using `Dockerfile.Debug`.
-The container logs will be "slightly" more verbose but this could help understanding potential issues. (I hope) 
+**I saved the config, but the log shows no `file changed`.**
+- Check the first log line. `using config: /app/config.yaml` means `/config` isn't mounted, so you're on the single-file fallback (see [Mounting the config](#mounting-the-config)).
+- On Unraid, make sure the host path you mounted is the one you edit (pool path vs `/mnt/user`, see [Unraid](#unraid)).
+- To check the watcher itself, rewrite the file from inside the container:
+  `docker exec <container> sh -c 'cp /config/config.yaml /tmp/c && cat /tmp/c > /config/config.yaml'`.
+  If that reloads, the watcher works and your edits arrive through a path the container can't watch.
+
+**The log shows liquidctl's `Usage:` text.**
+The command printed just above it got a value liquidctl can't parse: an empty value (e.g. a missing `pump_speed`), an odd number of curve values, or leftover text.
+
+**`ERROR: ...: unexpected error: KeyError('fan')`**
+The device has no channel with that name. For example, the Kraken X series has no `fan` channel, so remove `cooling.fan_speed`.
+
+**A fan doesn't follow the config.**
+- It isn't listed, so it keeps its last speed.
+- `fan_sync_speed` is set, which overrides all `fanN_speed` keys.
+- The `list` output at startup shows `Fan N control mode N/A`: nothing is detected on that header.
+
+**The container doesn't start, or runs an old script.**
+Something is mounted over `/app`. Mount your folder to `/config` instead.
+
+**I need more detail in the logs.**
+Set `SCRIPT_DEBUG=true` (`-e SCRIPT_DEBUG=true`) or use the `debug` tag. The script then prints all parsed values before and after every reload.
+
+## Credits
+
+- [liquidctl](https://github.com/liquidctl/liquidctl) does all the device work.
+- [avpnusr/liquidctl-docker](https://github.com/avpnusr/liquidctl-docker) was the starting point for running liquidctl in a container.
+- The YAML parser is based on [Stefan Farestam's bash parser](https://stackoverflow.com/a/21189044).
+- Config watching uses [inotify-tools](https://github.com/inotify-tools/inotify-tools).
+
+## License
+
+[MIT](LICENSE.md)
