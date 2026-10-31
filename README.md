@@ -7,7 +7,7 @@ I have an NZXT Kraken X53 AiO liquid cooler and a Corsair Commander Pro (to cont
 Luckily, the great developers of [liquidctl](https://github.com/liquidctl/liquidctl) released a tool that can control many liquid cooling AiO and fan controller solutions.
 [avpnusr](https://github.com/avpnusr/liquidctl-docker) created a Docker image that allows controlling the Kraken AIO, but unfortunately not the Commander controller. So I started extending the script, but quickly realized that starting from scratch would allow me to go with a config file instead - because that's easier to back up and allows changing values on the fly. I went with YAML, it's easy to read (and write) for humans and [Stefan Farestam](https://stackoverflow.com/a/21189044) shared a simple, bash-based YAML parser that worked out-of-the-box. 
 
-The shell script uses [inotify-tools](https://github.com/inotify-tools/inotify-tools) to watch the config file and upon arrival of the ```close_write``` event liquidctl will be reconfigured. I think, this could lead to interesting scenarios where external sources update the config file based on external temperature readings. What could possibly go wrong!?! 
+The shell script uses [inotify-tools](https://github.com/inotify-tools/inotify-tools) to watch the config file and whenever it is saved (```close_write```, or ```moved_to``` for editors that save via rename) liquidctl will be reconfigured. I think, this could lead to interesting scenarios where external sources update the config file based on external temperature readings. What could possibly go wrong!?! 
 
 ## How
 
@@ -21,13 +21,15 @@ The shell script uses [inotify-tools](https://github.com/inotify-tools/inotify-t
 6. To control all fans with the same speed (```liquidctl --match <match> set sync speed <speed>```), define ```fan_sync_speed: '<speed>'``` instead of ```fan<x>_speed: '<speed>'``` as controller property.
 7. Controller LED is not yet supported, but can be easily added.
 8. Refer to the config.template.yaml in the repository
+9. Comments are supported, both on their own line and after a value (```fan1_speed: 20  # quiet```). An unquoted value ends at the first ```#```, so quote the value if it needs a literal ```#```. Fans you don't list keep whatever speed they were last set to, e.g. from a previous ```fan_sync_speed``` run.
 
 ### container mount options
 
 1. Run the container privileged (```--privileged```) and reduce log max size (e.g. ```--log-opt max-size=1m --log-opt max-file=1```). 
 2. No network is required. 
 3. Mount your water cooler or controller devices into the container, e.g. ```--device /sys/bus/usb/devices/1-12.2```
-4. Mount your config file into the container. The script expects the file in the ```/app``` folder, e.g. ```-v ~/config.yaml:/app/config.yaml```
+4. Mount the **directory** that contains your config.yaml to ```/config```, e.g. ```-v /mnt/user/appdata/laac:/config```. 
+   Mounting the file itself (```-v ~/config.yaml:/app/config.yaml```) still works, but a single-file bind mount is pinned to the file's inode: many editors (vim, sed -i, most GUI editors, some SMB clients) save by writing a new file and renaming it over the old one, and from then on the container no longer sees any change until it is restarted. The script detects this and logs a ```WARNING```, but the directory mount avoids the problem entirely.
 
 **container start**
 
@@ -36,7 +38,7 @@ docker run -d \
     --device /sys/bus/usb/devices/<your_usb_id> \
     --privileged \
     --log-opt max-size=1m --log-opt max-file=1 \
-    -v <path_to>/config.yaml:/app/config.yaml \
+    -v <path_to_config_dir>:/config \
     --restart=unless-stopped mplogas/laac:latest
 ```
 
