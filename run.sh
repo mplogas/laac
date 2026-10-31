@@ -1,12 +1,16 @@
 #! /bin/bash
 
 ## source: https://stackoverflow.com/a/21189044
+## extended to ignore trailing "# comments": a quoted value ends at its own
+## closing quote ('#' inside quotes is kept), an unquoted value ends at the
+## first '#' (quote the value if it needs a literal '#')
 function parse_yaml {
    local prefix=$2
    local s='[[:space:]]*' w='[a-zA-Z0-9_]*' fs=$(echo @|tr @ '\034')
    sed -ne "s|^\($s\):|\1|" \
-        -e "s|^\($s\)\($w\)$s:$s[\"']\(.*\)[\"']$s\$|\1$fs\2$fs\3|p" \
-        -e "s|^\($s\)\($w\)$s:$s\(.*\)$s\$|\1$fs\2$fs\3|p"  $1 |
+        -e "s|^\($s\)\($w\)$s:$s\"\([^\"]*\)\"$s\(#.*\)\{0,1\}\$|\1$fs\2$fs\3|p" \
+        -e "s|^\($s\)\($w\)$s:$s'\([^']*\)'$s\(#.*\)\{0,1\}\$|\1$fs\2$fs\3|p" \
+        -e "s|^\($s\)\($w\)$s:$s\([^#]*[^#[:space:]]\)\{0,1\}$s\(#.*\)\{0,1\}\$|\1$fs\2$fs\3|p"  $1 |
    awk -F$fs '{
       indent = length($1)/2;
       vname[indent] = $2;
@@ -117,37 +121,71 @@ function configure_liquidctl {
 }
 
 
-eval $(parse_yaml /app/config.yaml)
-if [ ! -z "$SCRIPT_DEBUG" ]; then
-   echo "initial:"
-   debug_variables
-fi
-configure_liquidctl
-
-inotifywait -q -m -e close_write /app/config.yaml |
-while read -r filename event; do
-  echo "file changed"
+function reload_config {
+   echo "file changed"
    if [ ! -z "$SCRIPT_DEBUG" ]; then
       echo "cached:"
       debug_variables
    fi
-   
-  unset_optional_variables
+
+   unset_optional_variables
 
    if [ ! -z "$SCRIPT_DEBUG" ]; then
       echo "cleared:"
       debug_variables
    fi
 
-  eval $(parse_yaml /app/config.yaml)
+   eval $(parse_yaml "$config_file")
 
    if [ ! -z "$SCRIPT_DEBUG" ]; then
       echo "reload:"
       debug_variables
    fi
 
-  configure_liquidctl
-done
+   configure_liquidctl
+}
+
+
+## preferred: config.yaml inside a directory mounted to /config
+## legacy:    config.yaml mounted as a single file to /app/config.yaml
+config_dir=/config
+if [ -f "$config_dir/config.yaml" ]; then
+   config_file="$config_dir/config.yaml"
+else
+   config_file=/app/config.yaml
+fi
+echo "using config: $config_file"
+
+eval $(parse_yaml "$config_file")
+if [ ! -z "$SCRIPT_DEBUG" ]; then
+   echo "initial:"
+   debug_variables
+fi
+configure_liquidctl
+
+if [ "$config_file" == "$config_dir/config.yaml" ]; then
+   ## watching the directory catches in-place writes (close_write) as well as
+   ## editors that save by writing a temp file and renaming it (moved_to)
+   inotifywait -q -m -e close_write -e moved_to --format '%f' "$config_dir" |
+   while read -r changed; do
+      [ "$changed" == "config.yaml" ] && reload_config
+   done
+else
+   ## a single-file bind mount is pinned to the file's inode. editors that save
+   ## via rename create a new inode on the host, which never reaches the
+   ## container: no more events, stale content. the old inode's link count
+   ## dropping to 0 (attrib event) is the only trace, so make it loud.
+   inotifywait -q -m -e close_write -e attrib --format '%e' "$config_file" |
+   while read -r event; do
+      if [ "$(stat -c %h "$config_file")" == "0" ]; then
+         echo "WARNING: $config_file was replaced on the host (editor saved via rename)."
+         echo "WARNING: this container can no longer see config changes. restart it to apply the new config,"
+         echo "WARNING: or mount the config directory to /config instead (see README)."
+      elif [[ "$event" == CLOSE_WRITE* ]]; then
+         reload_config
+      fi
+   done
+fi
 
 
 
